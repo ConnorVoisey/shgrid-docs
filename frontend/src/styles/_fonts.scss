@@ -1,0 +1,32 @@
+@use './_variables.scss' as *;
+@import url('https://fonts.googleapis.com/css2?family=Inter&family=Space+Grotesk:wght@500&display=swap');
+
+:root {
+	font-family: Inter;
+}
+@mixin title($color) {
+	color: $color;
+	font-family: Space Grotesk;
+	font-weight: 500;
+	font-size: 36px;
+	margin-bottom: size(4);
+	@media (max-width: 700px) {
+		& {
+			font-size: 28px;
+		}
+	}
+}
+.title {
+	@include title(on-surface(2));
+}
+.subtitle {
+	color: on-surface(1);
+	font-family: Space Grotesk;
+	font-weight: 500;
+	font-size: 1.3rem;
+	margin-bottom: size(2);
+}
+
+.title-on-primary {
+	@include title(on-primary(2));
+}
