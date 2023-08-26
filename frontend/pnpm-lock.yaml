@@ -15,8 +15,8 @@ dependencies:
     specifier: ^1.29.0
     version: 1.29.0
   shgrid-svelte:
-    specifier: ^0.0.7
-    version: 0.0.7(react@15.7.0)(svelte@3.59.1)
+    specifier: ^0.0.9
+    version: 0.0.9(react@15.7.0)(svelte@3.59.1)
 
 devDependencies:
   '@faker-js/faker':
@@ -3274,8 +3274,8 @@ packages:
     engines: {node: '>=8'}
     dev: true
 
-  /shgrid-svelte@0.0.7(react@15.7.0)(svelte@3.59.1):
-    resolution: {integrity: sha512-IIA10I0JaAuBRXuj59MDX7ISARfO9vO1ar8qP9MuAS2wz0NPwnbogzzFPjFHSCL5P7wMAN01DJm0/uuqlOSfLQ==}
+  /shgrid-svelte@0.0.9(react@15.7.0)(svelte@3.59.1):
+    resolution: {integrity: sha512-8/Cbw6s6IMuSZYztnuaUfRH++6/64MqsRDVvPHMJOBPh7yVi1GjyKu1jPMcJxdRx9qJj1UZDIN/iiJNVkzVtmQ==}
     peerDependencies:
       svelte: ^3.54.0
     dependencies:
