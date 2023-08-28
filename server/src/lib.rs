@@ -1,9 +1,7 @@
-pub mod routes;
-pub mod models {
-    pub mod organisation;
-    pub mod contact;
-}
 pub mod error;
+pub mod models;
+pub mod query_params;
+pub mod routes;
 
 use dotenvy::dotenv;
 use routes::create_routes;

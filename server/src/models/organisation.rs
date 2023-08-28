@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
-use fake::{Dummy, Fake, Faker};
-use sea_query::{Expr, Iden, InsertStatement, PostgresQueryBuilder, Query};
+use fake::Fake;
+use sea_query::{Iden, PostgresQueryBuilder, Query};
 use sea_query_binder::{SqlxBinder, SqlxValues};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx::{Error, Pool, Postgres};
 use uuid::Uuid;
 

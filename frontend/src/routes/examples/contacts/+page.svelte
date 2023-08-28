@@ -1,8 +1,32 @@
 <script lang="ts">
-	import Shgrid from '$lib/shgrid.svelte';
+	import { Shgrid } from 'shgrid-svelte';
+	import 'shgrid-svelte/dist/default-styles.scss';
 	import { ServerGridBuilder } from '$lib/js/ServerGridBuilder.js';
-	import '$lib/default-styles.scss';
 	import { PUBLIC_BASE_URL } from '$env/static/public';
+
+	// let mapper: ServerGridBuilder['mapper'] = (res: any) => {
+	// 	return {
+	// 		data: res.data,
+	// 		count: res.count,
+	// 	};
+	// };
+	// const url = `${PUBLIC_BASE_URL}/contact`;
+	// let builder = new ServerGridBuilder({
+	// 	columns: [
+	// 		{ id: 'first_name', label: 'First Name', searchable: false },
+	// 		{ id: 'last_name', label: 'Last Name', searchable: false },
+	// 		{ id: 'email', label: 'Email', searchable: false, hidden: true },
+	// 	],
+	// 	url,
+	// 	mapper,
+	// 	rowLink: row => `${url}/${row.id}`,
+	// 	limit: 5,
+	// });
+
+	// import Shgrid from 'shgrid-svelte';
+	// import { ServerGridBuilder } from 'shgrid-svelte/dist/js/ServerGridBuilder';
+	// import 'shgrid-svelte/dist/default-styles.scss';
+	// import { PUBLIC_BASE_URL } from '$env/static/public';
 
 	let mapper: ServerGridBuilder['mapper'] = (res: any) => {
 		return {
@@ -17,23 +41,23 @@
 			postcode: string;
 		};
 	};
-	const url = `${PUBLIC_BASE_URL}/api/contact`;
+	const url = `${PUBLIC_BASE_URL}/contact`;
 	let builder = new ServerGridBuilder({
 		columns: [
 			{ id: 'id', label: 'Id', hidden: true },
-			{ id: 'firstName', label: 'First Name', hidden: true },
-			{ id: 'lastName', label: 'Last Name', hidden: true },
+			{ id: 'first_name', label: 'First Name' },
+			{ id: 'last_name', label: 'Last Name', hidden: true },
 			{ id: 'email', label: 'Email' },
-			{
-				id: 'organisation',
-				label: 'Organisation',
-				formatter: (row: Row) =>
-					`<p><strong>Name: </strong>${row.organisation.name}</p><p><strong>Postcode: </strong>${row.organisation.postcode}</p>`,
-				link: row => `/examples/data/organisation/${(row as Row).organisation.id}`,
-			},
+			{ id: 'organisation_id', label: 'Organisation' },
+			// {
+			// 	id: 'organisation',
+			// 	label: 'Organisation',
+			// 	formatter: (row: Row) =>
+			// 		`<p><strong>Name: </strong>${row.organisation.name}</p><p><strong>Postcode: </strong>${row.organisation.postcode}</p>`,
+			// 	link: row => `/examples/data/organisation/${(row as Row).organisation.id}`,
+			// },
 			{ id: 'active', label: 'Active', hidden: true },
 			{ id: 'mobile', label: 'Mobile', hidden: true },
-			{ id: 'officePhone', label: 'Office Phone' },
 			{ id: 'postcode', label: 'Postcode', hidden: true },
 		],
 		url,

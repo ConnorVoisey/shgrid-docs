@@ -1,10 +1,10 @@
-use chrono::{DateTime, Utc};
-use fake::{Dummy, Fake, Faker};
-use futures::future::try_join_all;
+
+
+
 use rand::Rng;
-use sea_query::{Expr, Iden, InsertStatement, PostgresQueryBuilder, Query};
-use sea_query_binder::{SqlxBinder, SqlxValues};
-use serde::{Deserialize, Serialize};
+
+
+
 use server::{
     connect,
     models::{contact::create_contacts, organisation::create_organisations},

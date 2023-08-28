@@ -1,0 +1,182 @@
+{
+	"info": {
+		"_postman_id": "1cdd095d-7244-4f7e-aca4-6aa74c1dd567",
+		"name": "Shgrid",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "23743355"
+	},
+	"item": [
+		{
+			"name": "contact",
+			"item": [
+				{
+					"name": "show",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL}}/contact/:id",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"contact",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": ""
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "index",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL}}/contact?offset=3&limit=5&sorting=[[\"first_name\", \"asc\"], [\"last_name\", \"desc\"]]&filters=[[\"first_name\", \"ada\"], [\"email\", \"example.net\"]]",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"contact"
+							],
+							"query": [
+								{
+									"key": "offset",
+									"value": "3"
+								},
+								{
+									"key": "limit",
+									"value": "5"
+								},
+								{
+									"key": "sorting",
+									"value": "[[\"first_name\", \"asc\"], [\"last_name\", \"desc\"]]"
+								},
+								{
+									"key": "filters",
+									"value": "[[\"first_name\", \"ada\"], [\"email\", \"example.net\"]]"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "index pagination",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL}}/contact?offset=3&limit=5",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"contact"
+							],
+							"query": [
+								{
+									"key": "offset",
+									"value": "3"
+								},
+								{
+									"key": "limit",
+									"value": "5"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "index filter",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL}}/contact?filters=[[\"first_name\", \"ada\"], [\"email\", \"example.net\"]]",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"contact"
+							],
+							"query": [
+								{
+									"key": "filters",
+									"value": "[[\"first_name\", \"ada\"], [\"email\", \"example.net\"]]"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "index sort",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL}}/contact?sorting=[[\"first_name\", \"asc\"], [\"last_name\", \"desc\"]]",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"contact"
+							],
+							"query": [
+								{
+									"key": "sorting",
+									"value": "[[\"first_name\", \"asc\"], [\"last_name\", \"desc\"]]"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "contact",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "BASE_URL",
+			"value": "http://localhost:3000",
+			"type": "string"
+		}
+	]
+}

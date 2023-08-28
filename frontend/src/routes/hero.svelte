@@ -10,11 +10,12 @@
 			count: res.count,
 		};
 	};
-	const url = `${PUBLIC_BASE_URL}/api/referral`;
+	const url = `${PUBLIC_BASE_URL}/contact`;
 	let builder = new ServerGridBuilder({
 		columns: [
-			{ id: 'referrer_consent', label: 'referrer Consent', searchable: false },
-			{ id: 'additional_information', label: 'Additional Information', searchable: false },
+			{ id: 'first_name', label: 'First Name', searchable: false },
+			{ id: 'last_name', label: 'Last Name', searchable: false },
+			{ id: 'email', label: 'Email', searchable: false, hidden: true },
 		],
 		url,
 		mapper,
