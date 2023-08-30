@@ -1,9 +1,4 @@
-
-
-
 use rand::Rng;
-
-
 
 use server::{
     connect,
@@ -69,9 +64,13 @@ async fn get_org_ids(
     )
     .fetch_all(pool)
     .await?;
-    for row in org_ids {
-        let index = rand::thread_rng().gen_range(0..vec.len());
-        vec[index] = Some(row.id);
+    // One org has many contacts - this assigns many contacts for each org
+    //TODO: this is really not a great solution - improve this at some point
+    for _ in 0..20 {
+        for row in &org_ids {
+            let index = rand::thread_rng().gen_range(0..vec.len());
+            vec[index] = Some(row.id);
+        }
     }
 
     Ok(vec)
