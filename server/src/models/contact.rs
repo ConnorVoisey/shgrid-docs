@@ -1,3 +1,4 @@
+use super::organisation::{Organisation, OrganisationOutput};
 use super::GetColFromStr;
 use crate::error::{Error, Result};
 use crate::models::RowCount;
@@ -10,26 +11,44 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use fake::Fake;
-use sea_query::{Expr, Iden, PostgresQueryBuilder};
+use sea_query::{Alias, Expr, Iden, PostgresQueryBuilder};
 use sea_query_binder::{SqlxBinder, SqlxValues};
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-#[debug_handler]
 pub async fn show_contact(
     State(pool): State<Pool<Postgres>>,
     Path(contact_id): Path<Uuid>,
 ) -> Result<Json<ContactFullOutput>> {
     match sqlx::query_as!(
-        ContactFullOutput,
-        r#"SELECT * FROM contact WHERE "id" = $1"#,
+        ContactFullRow,
+        r#"SELECT 
+	contact.id, 
+	contact.first_name, 
+	contact.last_name,
+	contact.email,
+	contact.mobile,
+	contact.active,
+	contact.created_at,
+	contact.updated_at,
+	org.id as "org_id?",
+	org.name as org_name,
+	org.postcode as org_postcode,
+	org.active as org_active,
+	org.created_at as org_created_at,
+	org.updated_at as org_updated_at
+FROM contact
+LEFT JOIN 
+	organisation as org on 
+	org.id = contact.organisation_id
+WHERE contact.id = $1;"#,
         contact_id
     )
     .fetch_optional(&pool)
     .await?
     {
-        Some(contact) => Ok(Json(contact)),
+        Some(row) => Ok(Json(row.to_output())),
         None => Err(Error::NotFound),
     }
 }
@@ -73,9 +92,30 @@ impl GetColFromStr for Contact {
             _ => None,
         }
     }
+
+    fn get_table() -> Self::Item {
+        Contact::Table
+    }
 }
 
 #[derive(sqlx::FromRow, Debug, Deserialize, Serialize)]
+pub struct ContactFullRow {
+    id: Uuid,
+    first_name: Option<String>,
+    last_name: Option<String>,
+    email: String,
+    mobile: String,
+    active: Option<bool>,
+    created_at: Option<DateTime<Utc>>,
+    updated_at: Option<DateTime<Utc>>,
+    org_id: Option<Uuid>,
+    org_name: Option<String>,
+    org_postcode: Option<String>,
+    org_active: Option<bool>,
+    org_created_at: Option<DateTime<Utc>>,
+    org_updated_at: Option<DateTime<Utc>>,
+}
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ContactFullOutput {
     id: Uuid,
     first_name: Option<String>,
@@ -83,9 +123,36 @@ pub struct ContactFullOutput {
     email: String,
     mobile: String,
     active: Option<bool>,
-    organisation_id: Option<Uuid>,
+    organisation: Option<OrganisationOutput>,
     created_at: Option<DateTime<Utc>>,
     updated_at: Option<DateTime<Utc>>,
+}
+impl ContactFullRow {
+    fn to_output(self) -> ContactFullOutput {
+        let organisation = match (self.org_id, self.active) {
+            (Some(id), Some(active)) => Some(OrganisationOutput {
+                id,
+                active,
+                name: self.org_name,
+                postcode: self.org_postcode,
+                created_at: self.org_created_at,
+                updated_at: self.org_updated_at,
+            }),
+            _ => None,
+        };
+
+        ContactFullOutput {
+            id: self.id,
+            first_name: self.first_name,
+            last_name: self.last_name,
+            email: self.email,
+            mobile: self.mobile,
+            active: self.active,
+            organisation,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        }
+    }
 }
 
 struct ContactInput {
@@ -156,18 +223,48 @@ fn get_contacts_sql(params: &StdQueryParams) -> Result<(String, SqlxValues)> {
     let limit = std::cmp::min(params.limit.unwrap_or(100), 10_000);
     let offset = params.offset.unwrap_or(0);
     let columns = [
-        Contact::Id,
-        Contact::FirstName,
-        Contact::LastName,
-        Contact::Email,
-        Contact::Mobile,
-        Contact::OrganisationId,
-        Contact::Active,
-        Contact::CreatedAt,
-        Contact::UpdatedAt,
+        ((Contact::Table, Contact::Id)),
+        ((Contact::Table, Contact::FirstName)),
+        ((Contact::Table, Contact::LastName)),
+        ((Contact::Table, Contact::Email)),
+        ((Contact::Table, Contact::Mobile)),
+        ((Contact::Table, Contact::Active)),
+        ((Contact::Table, Contact::CreatedAt)),
+        ((Contact::Table, Contact::UpdatedAt)),
     ];
     let mut query = sea_query::Query::select();
-    query.from(Contact::Table).columns(columns);
+    query
+        .from(Contact::Table)
+        .columns(columns)
+        .expr_as(
+            Expr::col((Organisation::Table, Organisation::Id)),
+            Alias::new("org_id"),
+        )
+        .expr_as(
+            Expr::col((Organisation::Table, Organisation::Name)),
+            Alias::new("org_name"),
+        )
+        .expr_as(
+            Expr::col((Organisation::Table, Organisation::Active)),
+            Alias::new("org_active"),
+        )
+        .expr_as(
+            Expr::col((Organisation::Table, Organisation::Postcode)),
+            Alias::new("org_postcode"),
+        )
+        .expr_as(
+            Expr::col((Organisation::Table, Organisation::CreatedAt)),
+            Alias::new("org_created_at"),
+        )
+        .expr_as(
+            Expr::col((Organisation::Table, Organisation::UpdatedAt)),
+            Alias::new("org_updated_at"),
+        )
+        .left_join(
+            Organisation::Table,
+            Expr::col((Organisation::Table, Organisation::Id))
+                .equals((Contact::Table, Contact::OrganisationId)),
+        );
     Contact::add_filters(&mut query, &params.filters)?;
     Contact::add_sorting(&mut query, &params.sorting)?;
     Ok(query
@@ -189,15 +286,24 @@ fn get_contact_count_sql(filters: &Filters) -> Result<(String, SqlxValues)> {
 
 async fn get_contacts(pool: &Pool<Postgres>, params: StdQueryParams) -> Result<ContactResponse> {
     let (sql, values) = get_contacts_sql(&params)?;
-    let contacts = sqlx::query_as_with::<_, ContactFullOutput, _>(&sql, values)
+    dbg!(&sql);
+    let contact_rows = sqlx::query_as_with::<_, ContactFullRow, _>(&sql, values)
         .fetch_all(pool)
         .await?;
+    dbg!(&contact_rows);
+    let contacts: Vec<ContactFullOutput> = contact_rows
+        .into_iter()
+        .map(|contact_row| contact_row.to_output())
+        .collect();
+    dbg!(&contacts);
 
     let (sql, values) = get_contact_count_sql(&params.filters)?;
+    dbg!(&sql);
     let count = sqlx::query_as_with::<_, RowCount, _>(&sql, values)
         .fetch_one(pool)
         .await?
         .count;
+    dbg!(&count);
 
     Ok(ContactResponse {
         count,

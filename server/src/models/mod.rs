@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 pub trait GetColFromStr {
     type Item;
+    fn get_table() -> Self::Item;
     fn get_col_from_str(search: &str) -> Option<Self::Item>;
     fn add_filters<'a>(
         query: &'a mut sea_query::SelectStatement,
@@ -29,7 +30,8 @@ pub trait GetColFromStr {
                 }
             };
             let value = &filter[1];
-            query.and_where(Expr::col(col).like(&format!("%{value}%")));
+            //FIXME: if the not all columns are filterable with the `LIKE` expression such as Uuids. This needs to be handled
+            query.and_where(Expr::col((Self::get_table(), col)).like(&format!("%{value}%")));
         }
         Ok(query)
     }

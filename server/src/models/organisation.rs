@@ -2,12 +2,12 @@ use chrono::{DateTime, Utc};
 use fake::Fake;
 use sea_query::{Iden, PostgresQueryBuilder, Query};
 use sea_query_binder::{SqlxBinder, SqlxValues};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{Error, Pool, Postgres};
 use uuid::Uuid;
 
 #[derive(Iden)]
-enum Organisation {
+pub enum Organisation {
     Table,
     Id,
     Name,
@@ -17,14 +17,14 @@ enum Organisation {
     UpdatedAt,
 }
 
-#[derive(sqlx::FromRow, Debug, Deserialize)]
-struct OrganisationOutput {
-    id: Uuid,
-    name: String,
-    postcode: String,
-    active: bool,
-    created_at: Option<DateTime<Utc>>,
-    updated_at: Option<DateTime<Utc>>,
+#[derive(sqlx::FromRow, Debug, Deserialize, Serialize)]
+pub struct OrganisationOutput {
+    pub id: Uuid,
+    pub name: Option<String>,
+    pub postcode: Option<String>,
+    pub active: bool,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 pub async fn create_organisations(pool: &Pool<Postgres>, count: u32) -> Result<(), Error> {
     let batch_size = 1_000;
