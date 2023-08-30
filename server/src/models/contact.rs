@@ -266,7 +266,7 @@ fn get_contacts_sql(params: &StdQueryParams) -> Result<(String, SqlxValues)> {
                 .equals((Contact::Table, Contact::OrganisationId)),
         );
     Contact::add_filters(&mut query, &params.filters)?;
-    Contact::add_sorting(&mut query, &params.sorting)?;
+    Contact::add_sorting(&mut query, &params.sort)?;
     Ok(query
         .limit(limit)
         .offset(offset)
@@ -286,24 +286,24 @@ fn get_contact_count_sql(filters: &Filters) -> Result<(String, SqlxValues)> {
 
 async fn get_contacts(pool: &Pool<Postgres>, params: StdQueryParams) -> Result<ContactResponse> {
     let (sql, values) = get_contacts_sql(&params)?;
-    dbg!(&sql);
+    // dbg!(&sql);
     let contact_rows = sqlx::query_as_with::<_, ContactFullRow, _>(&sql, values)
         .fetch_all(pool)
         .await?;
-    dbg!(&contact_rows);
+    // dbg!(&contact_rows);
     let contacts: Vec<ContactFullOutput> = contact_rows
         .into_iter()
         .map(|contact_row| contact_row.to_output())
         .collect();
-    dbg!(&contacts);
+    // dbg!(&contacts);
 
     let (sql, values) = get_contact_count_sql(&params.filters)?;
-    dbg!(&sql);
+    // dbg!(&sql);
     let count = sqlx::query_as_with::<_, RowCount, _>(&sql, values)
         .fetch_one(pool)
         .await?
         .count;
-    dbg!(&count);
+    // dbg!(&count);
 
     Ok(ContactResponse {
         count,
@@ -328,7 +328,7 @@ mod test {
         let params = StdQueryParams::from(StdQueryParamsPreSerialize {
             offset: Some(200),
             limit: Some(50),
-            sorting: None,
+            sort: None,
             filters: None,
         })
         .unwrap();

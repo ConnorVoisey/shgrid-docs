@@ -26,7 +26,7 @@
 							"variable": [
 								{
 									"key": "id",
-									"value": ""
+									"value": "6f5ccdc6-4461-11ee-bcd2-836e2988bd07"
 								}
 							]
 						}
@@ -39,7 +39,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{BASE_URL}}/contact?offset=3&limit=5&sorting=[[\"first_name\", \"asc\"], [\"last_name\", \"desc\"]]&filters=[[\"first_name\", \"ada\"], [\"email\", \"example.net\"]]",
+							"raw": "{{BASE_URL}}/contact?offset=3&limit=200&sort=[[\"first_name\", \"asc\"], [\"last_name\", \"desc\"]]&filters=[[\"first_name\", \"ada\"], [\"email\", \"example\"]]",
 							"host": [
 								"{{BASE_URL}}"
 							],
@@ -53,15 +53,15 @@
 								},
 								{
 									"key": "limit",
-									"value": "5"
+									"value": "200"
 								},
 								{
-									"key": "sorting",
+									"key": "sort",
 									"value": "[[\"first_name\", \"asc\"], [\"last_name\", \"desc\"]]"
 								},
 								{
 									"key": "filters",
-									"value": "[[\"first_name\", \"ada\"], [\"email\", \"example.net\"]]"
+									"value": "[[\"first_name\", \"ada\"], [\"email\", \"example\"]]"
 								}
 							]
 						}

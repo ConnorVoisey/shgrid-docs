@@ -5,14 +5,14 @@ use serde::Deserialize;
 pub struct StdQueryParamsPreSerialize {
     pub limit: Option<u64>,
     pub offset: Option<u64>,
-    pub sorting: Option<String>,
+    pub sort: Option<String>,
     pub filters: Option<String>,
 }
 #[derive(Deserialize, Debug)]
 pub struct StdQueryParams {
     pub limit: Option<u64>,
     pub offset: Option<u64>,
-    pub sorting: Sorting,
+    pub sort: Sorting,
     pub filters: Filters,
 }
 pub type Filters = Vec<[String; 2]>;
@@ -24,15 +24,15 @@ impl StdQueryParams {
             Some(filters) => serde_json::from_str::<Filters>(&filters)?,
             None => vec![],
         };
-        let sorting = match pre_serialize.sorting {
-            Some(sorting) => serde_json::from_str::<Sorting>(&sorting)?,
+        let sort = match pre_serialize.sort {
+            Some(sort) => serde_json::from_str::<Sorting>(&sort)?,
             None => vec![],
         };
         Ok(Self {
             limit: pre_serialize.limit,
             offset: pre_serialize.offset,
             filters,
-            sorting,
+            sort,
         })
     }
 }
