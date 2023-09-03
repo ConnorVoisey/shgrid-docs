@@ -23,18 +23,19 @@
 <style lang="scss">
 	.bg-primary {
 		background-color: primary(5);
-        color: on-primary(0);
+		color: on-primary(0);
 	}
 	.wrapper {
 		@include content-width(1100px);
-        padding: size(8) 0;
+		padding: size(8) 0;
 		display: flex;
 		flex-direction: column;
 		gap: size(4);
-        align-items: center;
-        .btn-row{
-            display: flex;gap:size(4);
-        }
+		align-items: center;
+		.btn-row {
+			display: flex;
+			gap: size(4);
+		}
 		svg {
 			width: size(8);
 			fill: on-primary(1);

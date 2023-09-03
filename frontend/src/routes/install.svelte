@@ -1,7 +1,7 @@
 <script>
-	import CodeBlock from "$lib/codeBlock.svelte";
-
+	import CodeBlock from '$lib/codeBlock.svelte';
 </script>
+
 <section>
 	<div class="wrapper">
 		<h3 class="title">How to install <span>Shgrid</span></h3>
@@ -12,7 +12,7 @@
 
 		<h5>Svelte Version</h5>
 		<!-- TODO: get code blocks -->
-        <CodeBlock language="clike" code={`pnpm add shgrid-svelte`}/>
+		<CodeBlock language="clike" code={`pnpm add shgrid-svelte`} />
 
 		<h5>Standard Version</h5>
 		<div class="code-block">pnpm add shgrid</div>

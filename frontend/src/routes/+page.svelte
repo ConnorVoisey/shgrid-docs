@@ -4,7 +4,7 @@
 </script>
 
 <svelte:head>
-    <title>Shgrid</title>
+	<title>Shgrid</title>
 </svelte:head>
 <Hero />
 <Install />

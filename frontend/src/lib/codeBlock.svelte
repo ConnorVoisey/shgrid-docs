@@ -1,5 +1,5 @@
 <script lang="ts">
-    import '../styles/prism-themes/one-dark.scss'
+	import '../styles/prism-themes/one-dark.scss';
 
 	import Prism from 'prismjs';
 	import 'prism-svelte';

@@ -18,7 +18,7 @@
 		</label>
 		<nav>
 			<ul>
-                <li><a href="/getting-started">Getting Started</a></li>
+				<li><a href="/getting-started">Getting Started</a></li>
 				<li><a href="/examples">Examples</a></li>
 				<li><a href="/docs">Documentation</a></li>
 			</ul>
@@ -115,7 +115,7 @@
 			width: 0;
 			transition: width 200ms;
 		}
-		&:hover::after ,
+		&:hover::after,
 		&:focus::after {
 			width: 100%;
 		}
