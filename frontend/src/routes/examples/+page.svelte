@@ -2,22 +2,28 @@
 	type Example = { label: string; linkSegment: string; description: string; tags: string[] };
 	const serverSideExamples: Example[] = [
 		{
-			label: 'Contacts',
+			label: 'Basic Example',
 			linkSegment: 'contacts',
-			description: 'Fake contacts module',
-			tags: [],
+			description: 'Fake contacts module to display basic usage',
+			tags: ['columns', 'sort', 'filter'],
 		},
 		{
-			label: 'Single Sort',
-			linkSegment: 'single-layer-sort',
-			description: 'Single layer sorting',
-			tags: [],
+			label: 'Sorting',
+			linkSegment: 'sorting',
+			description: 'Predefined sorting and disabling sorting for columns',
+			tags: ['sort', 'columns'],
 		},
 		{
 			label: 'Multi Sort',
 			linkSegment: 'multi-layer-sort',
 			description: 'Multi layer sorting',
-			tags: [],
+			tags: ['sort', 'columns'],
+		},
+		{
+			label: 'Filtering',
+			linkSegment: 'filter',
+			description: 'Predefined filters and disabling filters for columns',
+			tags: ['filter', 'columns'],
 		},
 	];
 </script>
@@ -26,15 +32,14 @@
 	<title>Examples</title>
 </svelte:head>
 <div class="wrapper">
-	<h1 class="title">Examples</h1>
-	<h3>Server side examples</h3>
-	<ul>
+	<h3 class="title">Server side examples</h3>
+	<ul class="cards">
 		{#each serverSideExamples as example}
 			<li>
-				<a href={`/examples/${example.linkSegment}`}>
-					<h4>{example.label}</h4>
+				<a href={`/examples/${example.linkSegment}`} class="card-underline-hover">
+					<h4 class="subtitle">{example.label}</h4>
 					<p>{example.description}</p>
-					<ul>
+					<ul class="tags">
 						{#each example.tags as tag}
 							<li class="tag">{tag}</li>
 						{/each}
@@ -48,6 +53,12 @@
 <style lang="scss">
 	.wrapper {
 		@include content-width;
-        padding-top: size(16);
+		padding-top: size(16);
+	}
+
+	.cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+		gap: size(8);
 	}
 </style>

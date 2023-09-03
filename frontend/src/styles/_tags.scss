@@ -1,0 +1,12 @@
+@use './_variables.scss' as *;
+
+.tag {
+	padding: size(2);
+	border-radius: size(2);
+	background-color: surface(2);
+}
+.tags {
+	display: flex;
+	gap: size(2);
+	flex-wrap: wrap;
+}

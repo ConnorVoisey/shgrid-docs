@@ -1,0 +1,36 @@
+@use './_variables.scss' as *;
+
+.card,
+.card-underline-hover {
+	display: flex;
+	flex-direction: column;
+	gap: size(4);
+	padding: size(4);
+	border-radius: size(4);
+	border-bottom: solid 2px on-surface(0, 0.3);
+	background-color: surface(1);
+	width: 100%;
+	.title,
+	.subtitle {
+		margin-bottom: 0;
+	}
+}
+
+.card-underline-hover {
+	overflow: hidden;
+	position: relative;
+	&::after {
+		@include pseudo;
+		width: 0%;
+		bottom: 0px;
+		left: -0rem;
+		border-radius: size(4);
+		height: 3px;
+		background-color: primary(5);
+		transition: 200ms;
+	}
+	&:hover::after,
+	&:focus::after {
+		width: 100%;
+	}
+}

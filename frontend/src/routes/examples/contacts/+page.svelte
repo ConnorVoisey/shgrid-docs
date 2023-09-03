@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Shgrid , ServerGridBuilder} from 'shgrid-svelte';
+	import { Shgrid, ServerGridBuilder } from 'shgrid-svelte';
 	import 'shgrid-svelte/dist/default-styles.scss';
 	import { env } from '$env/dynamic/public';
 
@@ -16,14 +16,13 @@
 			{ id: 'first_name', label: 'First Name' },
 			{ id: 'last_name', label: 'Last Name', hidden: true },
 			{ id: 'email', label: 'Email' },
-			{ id: 'organisation_id', label: 'Organisation' },
-			// {
-			// 	id: 'organisation',
-			// 	label: 'Organisation',
-			// 	formatter: (row: Row) =>
-			// 		`<p><strong>Name: </strong>${row.organisation.name}</p><p><strong>Postcode: </strong>${row.organisation.postcode}</p>`,
-			// 	link: row => `/examples/data/organisation/${(row as Row).organisation.id}`,
-			// },
+			{
+				id: 'organisation',
+				label: 'Organisation',
+				formatter: row =>
+					`<p><strong>Name: </strong>${row?.organisation?.name}</p><p><strong>Postcode: </strong>${row?.organisation?.postcode}</p>`,
+				link: row => `${env.PUBLIC_BASE_URL}/organisation/${row?.organisation?.id}`,
+			},
 			{ id: 'active', label: 'Active', hidden: true },
 			{ id: 'mobile', label: 'Mobile', hidden: true },
 			{ id: 'postcode', label: 'Postcode', hidden: true },
@@ -34,19 +33,19 @@
 	});
 </script>
 
-<section class="hero">
-	<div class="left">
-		<h2>Shgrid</h2>
-		<p>It makes tables</p>
-	</div>
+<section class="content">
+	<h2 class="title">Example: Basic Usage</h2>
 	<div class="right">
 		<Shgrid {builder} />
 	</div>
 </section>
 
 <style lang="scss">
-	.hero {
-		display: flex;
-		gap: var(--size-8);
+	.content {
+		@include content-width;
+		margin: size(16) auto;
+	}
+	.title {
+		margin-bottom: size(8);
 	}
 </style>
