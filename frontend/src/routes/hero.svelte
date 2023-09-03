@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { Shgrid } from 'shgrid-svelte';
+	import { Shgrid, ServerGridBuilder } from 'shgrid-svelte';
 	import 'shgrid-svelte/dist/default-styles.scss';
-	import { ServerGridBuilder } from '$lib/js/ServerGridBuilder.js';
-	import { PUBLIC_BASE_URL } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
 
 	let mapper: ServerGridBuilder['mapper'] = (res: any) => {
 		return {
@@ -10,7 +9,7 @@
 			count: res.count,
 		};
 	};
-	const url = `${PUBLIC_BASE_URL}/contact`;
+	const url = `${env.PUBLIC_BASE_URL}/contact`;
 	let builder = new ServerGridBuilder({
 		columns: [
 			{ id: 'first_name', label: 'First Name', searchable: false },
