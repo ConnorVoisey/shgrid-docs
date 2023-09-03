@@ -30,3 +30,20 @@
 .title-on-primary {
 	@include title(on-primary(2));
 }
+
+.link {
+	text-decoration: underline;
+	color: primary(5);
+	position: relative;
+	&::after {
+		@include pseudo;
+		bottom: -1px;
+		height: 3px;
+		width: 0;
+		background-color: primary(5);
+		transition: width 200ms;
+	}
+	&:hover::after {
+		width: 100%;
+	}
+}

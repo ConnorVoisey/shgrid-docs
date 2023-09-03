@@ -15,6 +15,9 @@ const config = {
 		csrf: {
 			checkOrigin: false,
 		},
+		alias: {
+			$styles: 'src/styles',
+		},
 	},
 };
 
