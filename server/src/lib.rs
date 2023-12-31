@@ -1,36 +1,22 @@
+pub mod config;
 pub mod error;
 pub mod models;
 pub mod query_params;
 pub mod routes;
 
-use dotenvy::dotenv;
+use config::Config;
 use routes::create_routes;
-use sqlx::{postgres::PgPoolOptions, Pool};
-
-pub async fn connect() -> Pool<sqlx::Postgres> {
-    dotenv().ok();
-    let uri_string =
-        dotenvy::var("DATABASE_URL").expect("Failed to read env variable 'DATABASE_URL'");
-
-    // run_migrations(&pool)
-    //     .await
-    //     .expect("DB state did not match migrations");
-
-    PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&uri_string)
-        .await
-        .expect("Failed to connect to database at provided uri")
-}
-
-// async fn run_migrations(pool: &Pool<sqlx::Postgres>) -> Result<(), MigrateError> {
-//     sqlx::migrate!().run(pool).await
-// }
+use std::{net::SocketAddr, sync::Arc};
+use tracing::info;
 
 pub async fn run() {
-    let app = create_routes(connect().await);
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let config = Arc::new(Config::init());
+    let app = create_routes(config.clone());
+    let port = config.port;
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+
+    // serve the api
+    info!("hosting server at 127.0.0.1:{port}");
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }

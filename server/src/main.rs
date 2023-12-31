@@ -3,4 +3,3 @@ use server::run;
 async fn main() {
     run().await;
 }
-

@@ -1,31 +1,34 @@
 use crate::error::Result;
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[derive(Deserialize, Debug)]
 pub struct StdQueryParamsPreSerialize {
-    pub limit: Option<u64>,
-    pub offset: Option<u64>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
     pub sort: Option<String>,
     pub filters: Option<String>,
 }
 #[derive(Deserialize, Debug)]
-pub struct StdQueryParams {
-    pub limit: Option<u64>,
-    pub offset: Option<u64>,
-    pub sort: Sorting,
-    pub filters: Filters,
+pub struct StdQueryParams<T> {
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+    pub sort: Sorting<T>,
+    pub filters: Filtering<T>,
 }
-pub type Filters = Vec<[String; 2]>;
-pub type Sorting = Vec<[String; 2]>;
+pub type Filtering<T> = Vec<(T, String)>;
+pub type Sorting<T> = Vec<(T, SortingDirection)>;
 
-impl StdQueryParams {
+impl<T> StdQueryParams<T>
+where
+    T: DeserializeOwned,
+{
     pub fn from(pre_serialize: StdQueryParamsPreSerialize) -> Result<Self> {
         let filters = match pre_serialize.filters {
-            Some(filters) => serde_json::from_str::<Filters>(&filters)?,
+            Some(filters) => serde_json::from_str::<Filtering<T>>(&filters)?,
             None => vec![],
         };
         let sort = match pre_serialize.sort {
-            Some(sort) => serde_json::from_str::<Sorting>(&sort)?,
+            Some(sort) => serde_json::from_str::<Sorting<T>>(&sort)?,
             None => vec![],
         };
         Ok(Self {
@@ -35,4 +38,11 @@ impl StdQueryParams {
             sort,
         })
     }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SortingDirection {
+    Asc,
+    Desc,
 }

@@ -1,14 +1,23 @@
+use super::IndexQueryable;
+
 use chrono::{DateTime, Utc};
-use fake::Fake;
-use sea_query::{Iden, PostgresQueryBuilder, Query};
-use sea_query_binder::{SqlxBinder, SqlxValues};
 use serde::{Deserialize, Serialize};
-use sqlx::{Error, Pool, Postgres};
+
 use uuid::Uuid;
 
-#[derive(Iden)]
-pub enum Organisation {
-    Table,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Organisation {
+    pub id: Uuid,
+    pub name: String,
+    pub postcode: String,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OrganisationFields {
     Id,
     Name,
     Postcode,
@@ -16,65 +25,154 @@ pub enum Organisation {
     CreatedAt,
     UpdatedAt,
 }
-
-#[derive(sqlx::FromRow, Debug, Deserialize, Serialize)]
-pub struct OrganisationOutput {
-    pub id: Uuid,
-    pub name: Option<String>,
-    pub postcode: Option<String>,
-    pub active: bool,
-    pub created_at: Option<DateTime<Utc>>,
-    pub updated_at: Option<DateTime<Utc>>,
-}
-pub async fn create_organisations(pool: &Pool<Postgres>, count: u32) -> Result<(), Error> {
-    let batch_size = 1_000;
-    for _ in 0..(count / batch_size) {
-        let organisations = (0..batch_size).map(|_| get_fake_organisation_input());
-        let (sql, values) = insert_organisations_sql(organisations);
-        sqlx::query_with(&sql, values).fetch_all(pool).await?;
-    }
-    Ok(())
-}
-
-fn insert_organisations_sql(
-    organisations: impl Iterator<Item = OrganisationInput>,
-) -> (String, SqlxValues) {
-    let mut query = Query::insert();
-    query.into_table(Organisation::Table).columns([
-        Organisation::Name,
-        Organisation::Postcode,
-        Organisation::Active,
-    ]);
-    organisations.for_each(|org| {
-        query.values([org.name.into(), org.postcode.into(), org.active.into()]);
-    });
-    query.returning_all().build_sqlx(PostgresQueryBuilder {})
-}
-
-struct OrganisationInput {
-    name: String,
-    postcode: String,
-    active: bool,
-}
-fn get_fake_organisation_input() -> OrganisationInput {
-    use fake::faker::boolean::en::*;
-    use fake::faker::lorem::en::*;
-    let name: Vec<String> = Words(2..5).fake();
-    OrganisationInput {
-        name: name.join(" "),
-        postcode: fake::faker::address::en::PostCode().fake(),
-        active: Boolean(64).fake(),
+impl IndexQueryable for Organisation {
+    type Output = Organisation;
+    type Fields = OrganisationFields;
+    fn get_col_str_val(&self, key: &OrganisationFields) -> String {
+        match key {
+            OrganisationFields::Id => self.id.to_string(),
+            OrganisationFields::Name => self.name.to_string(),
+            OrganisationFields::Postcode => self.postcode.to_string(),
+            OrganisationFields::Active => self.active.to_string(),
+            OrganisationFields::CreatedAt => self.created_at.to_string(),
+            OrganisationFields::UpdatedAt => self.updated_at.unwrap_or_default().to_string(),
+        }
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn insert_org_sql() {
-        let organisations = (0..5).map(|_| get_fake_organisation_input());
-        let (sql, _) = insert_organisations_sql(organisations);
-
-        assert_eq!(sql, String::from(""));
-    }
+/// Returns a constant vector of organisations,
+/// This is the same everytime this function is called so that the output can be used in tests
+pub fn create_organisations() -> Vec<Organisation> {
+    vec![
+        Organisation {
+            id: Uuid::from_u128(121040434418823839494894009918579823997),
+            name: String::from("ZephyrSoft Solutions"),
+            postcode: String::from("59635-4901"),
+            active: false,
+            created_at: DateTime::parse_from_str(
+                "1983 Apr 13 12:09:14.274 +0000",
+                "%Y %b %d %H:%M:%S%.3f %z",
+            )
+            .unwrap()
+            .into(),
+            updated_at: None,
+        },
+        Organisation {
+            id: Uuid::from_u128(121040434418823839494894009918579823997),
+            name: String::from("QuantumStride Innovations"),
+            postcode: String::from("03963"),
+            active: false,
+            created_at: DateTime::parse_from_str(
+                "1983 Apr 13 12:09:14.274 +0000",
+                "%Y %b %d %H:%M:%S%.3f %z",
+            )
+            .unwrap()
+            .into(),
+            updated_at: None,
+        },
+        Organisation {
+            id: Uuid::from_u128(121040434418823839494894009918579823997),
+            name: String::from("SparkWise Technologies"),
+            postcode: String::from("59635-123"),
+            active: false,
+            created_at: DateTime::parse_from_str(
+                "1983 Apr 13 12:09:14.274 +0000",
+                "%Y %b %d %H:%M:%S%.3f %z",
+            )
+            .unwrap()
+            .into(),
+            updated_at: None,
+        },
+        Organisation {
+            id: Uuid::from_u128(121040434418823839494894009918579823997),
+            name: String::from("NovaPeak Enterprises"),
+            postcode: String::from("7812-9823"),
+            active: false,
+            created_at: DateTime::parse_from_str(
+                "1983 Apr 13 12:09:14.274 +0000",
+                "%Y %b %d %H:%M:%S%.3f %z",
+            )
+            .unwrap()
+            .into(),
+            updated_at: None,
+        },
+        Organisation {
+            id: Uuid::from_u128(121040434418823839494894009918579823997),
+            name: String::from("CrestCore Dynamics"),
+            postcode: String::from("82922-9876"),
+            active: false,
+            created_at: DateTime::parse_from_str(
+                "1983 Apr 13 12:09:14.274 +0000",
+                "%Y %b %d %H:%M:%S%.3f %z",
+            )
+            .unwrap()
+            .into(),
+            updated_at: None,
+        },
+        Organisation {
+            id: Uuid::from_u128(121040434418823839494894009918579823997),
+            name: String::from("NexusSphere Systems"),
+            postcode: String::from("12345-6789"),
+            active: false,
+            created_at: DateTime::parse_from_str(
+                "1983 Apr 13 12:09:14.274 +0000",
+                "%Y %b %d %H:%M:%S%.3f %z",
+            )
+            .unwrap()
+            .into(),
+            updated_at: None,
+        },
+        Organisation {
+            id: Uuid::from_u128(121040434418823839494894009918579823997),
+            name: String::from("BlueFlare Innovations"),
+            postcode: String::from("23788-2893"),
+            active: false,
+            created_at: DateTime::parse_from_str(
+                "1983 Apr 13 12:09:14.274 +0000",
+                "%Y %b %d %H:%M:%S%.3f %z",
+            )
+            .unwrap()
+            .into(),
+            updated_at: None,
+        },
+        Organisation {
+            id: Uuid::from_u128(121040434418823839494894009918579823997),
+            name: String::from("ZenithWave Solutions"),
+            postcode: String::from("82389-2839"),
+            active: false,
+            created_at: DateTime::parse_from_str(
+                "1983 Apr 13 12:09:14.274 +0000",
+                "%Y %b %d %H:%M:%S%.3f %z",
+            )
+            .unwrap()
+            .into(),
+            updated_at: None,
+        },
+        Organisation {
+            id: Uuid::from_u128(121040434418823839494894009918579823997),
+            name: String::from("OrionEdge Technologies"),
+            postcode: String::from("92192-2989"),
+            active: false,
+            created_at: DateTime::parse_from_str(
+                "1983 Apr 13 12:09:14.274 +0000",
+                "%Y %b %d %H:%M:%S%.3f %z",
+            )
+            .unwrap()
+            .into(),
+            updated_at: None,
+        },
+        Organisation {
+            id: Uuid::from_u128(121040434418823839494894009918579823997),
+            name: String::from("ApexLink Dynamics"),
+            postcode: String::from("98239-9829"),
+            active: false,
+            created_at: DateTime::parse_from_str(
+                "1983 Apr 13 12:09:14.274 +0000",
+                "%Y %b %d %H:%M:%S%.3f %z",
+            )
+            .unwrap()
+            .into(),
+            updated_at: None,
+        },
+    ]
 }

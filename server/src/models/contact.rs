@@ -1,343 +1,1090 @@
-use super::organisation::{Organisation, OrganisationOutput};
-use super::GetColFromStr;
-use crate::error::{Error, Result};
-use crate::models::RowCount;
-use crate::query_params::{Filters, StdQueryParams, StdQueryParamsPreSerialize};
-use axum::extract::Path;
-use axum::{
-    debug_handler,
-    extract::{Query, State},
-    Json,
-};
-use chrono::{DateTime, Utc};
-use fake::Fake;
-use sea_query::{Alias, Expr, Iden, PostgresQueryBuilder};
-use sea_query_binder::{SqlxBinder, SqlxValues};
+use super::{organisation::Organisation, IndexQueryable};
+use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-pub async fn show_contact(
-    State(pool): State<Pool<Postgres>>,
-    Path(contact_id): Path<Uuid>,
-) -> Result<Json<ContactFullOutput>> {
-    match sqlx::query_as!(
-        ContactFullRow,
-        r#"SELECT 
-	contact.id, 
-	contact.first_name, 
-	contact.last_name,
-	contact.email,
-	contact.mobile,
-	contact.active,
-	contact.created_at,
-	contact.updated_at,
-	org.id as "org_id?",
-	org.name as org_name,
-	org.postcode as org_postcode,
-	org.active as org_active,
-	org.created_at as org_created_at,
-	org.updated_at as org_updated_at
-FROM contact
-LEFT JOIN 
-	organisation as org on 
-	org.id = contact.organisation_id
-WHERE contact.id = $1;"#,
-        contact_id
-    )
-    .fetch_optional(&pool)
-    .await?
-    {
-        Some(row) => Ok(Json(row.to_output())),
-        None => Err(Error::NotFound),
-    }
-}
-#[debug_handler]
-pub async fn index_contact(
-    State(pool): State<Pool<Postgres>>,
-    Query(params): Query<StdQueryParamsPreSerialize>,
-) -> Result<Json<ContactResponse>> {
-    let params_serialized = StdQueryParams::from(params)?;
-    let contacts_res = get_contacts(&pool, params_serialized).await?;
-    Ok(Json(contacts_res))
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Contact {
+    pub id: Uuid,
+    pub first_name: String,
+    pub last_name: String,
+    pub email: String,
+    pub mobile: String,
+    pub active: bool,
+    pub organisation: Option<Organisation>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Iden, Debug)]
-pub enum Contact {
-    Table,
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContactFields {
     Id,
     FirstName,
     LastName,
     Email,
     Mobile,
     Active,
-    OrganisationId,
+    Organisation,
     CreatedAt,
     UpdatedAt,
 }
-
-impl GetColFromStr for Contact {
-    type Item = Contact;
-    fn get_col_from_str(search: &str) -> Option<Self::Item> {
-        match search {
-            "id" => Some(Contact::Id),
-            "first_name" => Some(Contact::FirstName),
-            "last_name" => Some(Contact::LastName),
-            "email" => Some(Contact::Email),
-            "mobile" => Some(Contact::Mobile),
-            "active" => Some(Contact::Active),
-            "organisation_id" => Some(Contact::OrganisationId),
-            "created_at" => Some(Contact::CreatedAt),
-            "updated_at" => Some(Contact::UpdatedAt),
-            _ => None,
-        }
-    }
-
-    fn get_table() -> Self::Item {
-        Contact::Table
-    }
-}
-
-#[derive(sqlx::FromRow, Debug, Deserialize, Serialize)]
-pub struct ContactFullRow {
-    id: Uuid,
-    first_name: Option<String>,
-    last_name: Option<String>,
-    email: String,
-    mobile: String,
-    active: Option<bool>,
-    created_at: Option<DateTime<Utc>>,
-    updated_at: Option<DateTime<Utc>>,
-    org_id: Option<Uuid>,
-    org_name: Option<String>,
-    org_postcode: Option<String>,
-    org_active: Option<bool>,
-    org_created_at: Option<DateTime<Utc>>,
-    org_updated_at: Option<DateTime<Utc>>,
-}
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ContactFullOutput {
-    id: Uuid,
-    first_name: Option<String>,
-    last_name: Option<String>,
-    email: String,
-    mobile: String,
-    active: Option<bool>,
-    organisation: Option<OrganisationOutput>,
-    created_at: Option<DateTime<Utc>>,
-    updated_at: Option<DateTime<Utc>>,
-}
-impl ContactFullRow {
-    fn to_output(self) -> ContactFullOutput {
-        let organisation = match (self.org_id, self.active) {
-            (Some(id), Some(active)) => Some(OrganisationOutput {
-                id,
-                active,
-                name: self.org_name,
-                postcode: self.org_postcode,
-                created_at: self.org_created_at,
-                updated_at: self.org_updated_at,
-            }),
-            _ => None,
-        };
-
-        ContactFullOutput {
-            id: self.id,
-            first_name: self.first_name,
-            last_name: self.last_name,
-            email: self.email,
-            mobile: self.mobile,
-            active: self.active,
-            organisation,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
+impl IndexQueryable for Contact {
+    type Output = Contact;
+    type Fields = ContactFields;
+    fn get_col_str_val(&self, key: &ContactFields) -> String {
+        match key {
+            ContactFields::Id => self.id.to_string(),
+            ContactFields::FirstName => self.first_name.to_string(),
+            ContactFields::LastName => self.last_name.to_string(),
+            ContactFields::Email => self.email.to_string(),
+            ContactFields::Mobile => self.mobile.to_string(),
+            ContactFields::Active => self.active.to_string(),
+            ContactFields::Organisation => match &self.organisation {
+                Some(org) => org.name.to_string(),
+                None => String::from("null"),
+            },
+            ContactFields::CreatedAt => self.created_at.to_string(),
+            ContactFields::UpdatedAt => self.updated_at.unwrap_or_default().to_string(),
         }
     }
 }
 
-struct ContactInput {
-    first_name: String,
-    last_name: String,
-    email: String,
-    mobile: String,
-    organisation_id: Option<Uuid>,
-    active: bool,
-}
-#[derive(Serialize)]
-pub struct ContactResponse {
-    count: i64,
-    data: Vec<ContactFullOutput>,
-}
-
-pub async fn create_contacts(
-    pool: &Pool<Postgres>,
-    organisation_ids: &[Option<Uuid>],
-) -> anyhow::Result<()> {
-    let batch_size = 1_000;
-    for batch_index in 0..(organisation_ids.len() / batch_size) {
-        let contacts = (0..batch_size)
-            .map(|i| get_fake_contact_input(organisation_ids[batch_index * batch_size + i]));
-        let (sql, values) = insert_contacts_sql(contacts)?;
-        sqlx::query_with(&sql, values).fetch_all(pool).await?;
-    }
-    Ok(())
-}
-
-fn insert_contacts_sql(
-    contacts: impl Iterator<Item = ContactInput>,
-) -> Result<(String, SqlxValues), sea_query::error::Error> {
-    let mut query = sea_query::Query::insert();
-    query.into_table(Contact::Table).columns([
-        Contact::FirstName,
-        Contact::LastName,
-        Contact::Email,
-        Contact::Mobile,
-        Contact::OrganisationId,
-        Contact::Active,
-    ]);
-    for contact in contacts {
-        query.values([
-            contact.first_name.into(),
-            contact.last_name.into(),
-            contact.email.into(),
-            contact.mobile.into(),
-            contact.organisation_id.into(),
-            contact.active.into(),
-        ])?;
-    }
-    Ok(query.returning_all().build_sqlx(PostgresQueryBuilder {}))
-}
-fn get_fake_contact_input(organisation_id: Option<Uuid>) -> ContactInput {
-    use fake::faker::boolean::en::*;
-    ContactInput {
-        first_name: fake::faker::name::en::FirstName().fake(),
-        last_name: fake::faker::name::en::LastName().fake(),
-        email: fake::faker::internet::en::SafeEmail().fake(),
-        mobile: fake::faker::phone_number::en::CellNumber().fake(),
-        organisation_id,
-        active: Boolean(64).fake(),
-    }
-}
-
-fn get_contacts_sql(params: &StdQueryParams) -> Result<(String, SqlxValues)> {
-    let limit = std::cmp::min(params.limit.unwrap_or(100), 10_000);
-    let offset = params.offset.unwrap_or(0);
-    let columns = [
-        ((Contact::Table, Contact::Id)),
-        ((Contact::Table, Contact::FirstName)),
-        ((Contact::Table, Contact::LastName)),
-        ((Contact::Table, Contact::Email)),
-        ((Contact::Table, Contact::Mobile)),
-        ((Contact::Table, Contact::Active)),
-        ((Contact::Table, Contact::CreatedAt)),
-        ((Contact::Table, Contact::UpdatedAt)),
-    ];
-    let mut query = sea_query::Query::select();
-    query
-        .from(Contact::Table)
-        .columns(columns)
-        .expr_as(
-            Expr::col((Organisation::Table, Organisation::Id)),
-            Alias::new("org_id"),
-        )
-        .expr_as(
-            Expr::col((Organisation::Table, Organisation::Name)),
-            Alias::new("org_name"),
-        )
-        .expr_as(
-            Expr::col((Organisation::Table, Organisation::Active)),
-            Alias::new("org_active"),
-        )
-        .expr_as(
-            Expr::col((Organisation::Table, Organisation::Postcode)),
-            Alias::new("org_postcode"),
-        )
-        .expr_as(
-            Expr::col((Organisation::Table, Organisation::CreatedAt)),
-            Alias::new("org_created_at"),
-        )
-        .expr_as(
-            Expr::col((Organisation::Table, Organisation::UpdatedAt)),
-            Alias::new("org_updated_at"),
-        )
-        .left_join(
-            Organisation::Table,
-            Expr::col((Organisation::Table, Organisation::Id))
-                .equals((Contact::Table, Contact::OrganisationId)),
-        );
-    Contact::add_filters(&mut query, &params.filters)?;
-    Contact::add_sorting(&mut query, &params.sort)?;
-    Ok(query
-        .limit(limit)
-        .offset(offset)
-        .build_sqlx(PostgresQueryBuilder {}))
-}
-
-fn get_contact_count_sql(filters: &Filters) -> Result<(String, SqlxValues)> {
-    let mut query = sea_query::Query::select();
-    query
-        .expr(Expr::col((Contact::Table, Contact::Id)).count())
-        .from(Contact::Table);
-
-    Contact::add_filters(&mut query, filters)?;
-
-    Ok(query.build_sqlx(PostgresQueryBuilder {}))
-}
-
-async fn get_contacts(pool: &Pool<Postgres>, params: StdQueryParams) -> Result<ContactResponse> {
-    let (sql, values) = get_contacts_sql(&params)?;
-    // dbg!(&sql);
-    let contact_rows = sqlx::query_as_with::<_, ContactFullRow, _>(&sql, values)
-        .fetch_all(pool)
-        .await?;
-    // dbg!(&contact_rows);
-    let contacts: Vec<ContactFullOutput> = contact_rows
-        .into_iter()
-        .map(|contact_row| contact_row.to_output())
-        .collect();
-    // dbg!(&contacts);
-
-    let (sql, values) = get_contact_count_sql(&params.filters)?;
-    // dbg!(&sql);
-    let count = sqlx::query_as_with::<_, RowCount, _>(&sql, values)
-        .fetch_one(pool)
-        .await?
-        .count;
-    // dbg!(&count);
-
-    Ok(ContactResponse {
-        count,
-        data: contacts,
-    })
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn insert_contacts_sql_simple() {
-        let org_ids = [Some(Uuid::default()), None, None];
-        let contacts = (0..3).map(|i| get_fake_contact_input(org_ids[i]));
-        let (sql, _) = insert_contacts_sql(contacts).unwrap();
-
-        assert_eq!(sql, String::from(""));
-    }
-
-    #[test]
-    fn select_contacts_sql_simple() {
-        let params = StdQueryParams::from(StdQueryParamsPreSerialize {
-            offset: Some(200),
-            limit: Some(50),
-            sort: None,
-            filters: None,
-        })
-        .unwrap();
-        let (sql, _) = get_contacts_sql(&params).unwrap();
-        assert_eq!(
-            sql,
-            String::from(
-                r#"SELECT "first_name", "last_name", "email", "mobile", "organisation_id", "active" FROM "contact" LIMIT $1 OFFSET $2"#
-            )
-        );
-    }
+pub fn create_contacts(organisations: &[Organisation]) -> Vec<Contact> {
+    vec![
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Michael"),
+            last_name: String::from("Johnson"),
+            email: String::from("michael.johnson@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: Some(organisations[7].clone()),
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 3, 12, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Emily"),
+            last_name: String::from("Williams"),
+            email: String::from("emily.williams@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 4, 13, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Christopher"),
+            last_name: String::from("Brown"),
+            email: String::from("chris.brown@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 5, 14, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Sophia"),
+            last_name: String::from("Miller"),
+            email: String::from("sophia.miller@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 6, 15, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Liam"),
+            last_name: String::from("Jones"),
+            email: String::from("liam.jones@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 7, 16, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Ava"),
+            last_name: String::from("Wilson"),
+            email: String::from("ava.wilson@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 8, 17, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Olivia"),
+            last_name: String::from("Thompson"),
+            email: String::from("olivia.thompson@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 9, 18, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Noah"),
+            last_name: String::from("Roberts"),
+            email: String::from("noah.roberts@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 10, 19, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Mia"),
+            last_name: String::from("Clark"),
+            email: String::from("mia.clark@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 11, 20, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Harper"),
+            last_name: String::from("Turner"),
+            email: String::from("harper.turner@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 15, 0, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Evelyn"),
+            last_name: String::from("Collins"),
+            email: String::from("evelyn.collins@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 16, 1, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Grace"),
+            last_name: String::from("Bennett"),
+            email: String::from("grace.bennett@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 17, 2, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Luna"),
+            last_name: String::from("Hughes"),
+            email: String::from("luna.hughes@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 18, 3, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Levi"),
+            last_name: String::from("Russell"),
+            email: String::from("levi.russell@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 19, 4, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Ellie"),
+            last_name: String::from("Griffin"),
+            email: String::from("ellie.griffin@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 20, 5, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Mason"),
+            last_name: String::from("Ward"),
+            email: String::from("mason.ward@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 21, 6, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Willow"),
+            last_name: String::from("Foster"),
+            email: String::from("willow.foster@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 22, 7, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Hudson"),
+            last_name: String::from("Howard"),
+            email: String::from("hudson.howard@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 23, 8, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Scarlett"),
+            last_name: String::from("Bryant"),
+            email: String::from("scarlett.bryant@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 24, 9, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Gabriel"),
+            last_name: String::from("Watson"),
+            email: String::from("gabriel.watson@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 25, 10, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Zoe"),
+            last_name: String::from("Dunn"),
+            email: String::from("zoe.dunn@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 26, 11, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Nora"),
+            last_name: String::from("Carter"),
+            email: String::from("nora.carter@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 27, 12, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Eli"),
+            last_name: String::from("Perez"),
+            email: String::from("eli.perez@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 28, 13, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Mila"),
+            last_name: String::from("Flores"),
+            email: String::from("mila.flores@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 29, 14, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Aria"),
+            last_name: String::from("Garcia"),
+            email: String::from("aria.garcia@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 30, 15, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Axel"),
+            last_name: String::from("Reyes"),
+            email: String::from("axel.reyes@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 1, 31, 16, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Liam"),
+            last_name: String::from("Campbell"),
+            email: String::from("liam.campbell@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 1, 17, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Elena"),
+            last_name: String::from("Stewart"),
+            email: String::from("elena.stewart@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 2, 18, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Jackson"),
+            last_name: String::from("Mitchell"),
+            email: String::from("jackson.mitchell@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 3, 19, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Aurora"),
+            last_name: String::from("Lee"),
+            email: String::from("aurora.lee@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 4, 20, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Mateo"),
+            last_name: String::from("Patterson"),
+            email: String::from("mateo.patterson@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 5, 21, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Nova"),
+            last_name: String::from("Gray"),
+            email: String::from("nova.gray@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 6, 22, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Leo"),
+            last_name: String::from("Ward"),
+            email: String::from("leo.ward@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 7, 23, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Owen"),
+            last_name: String::from("Barnes"),
+            email: String::from("owen.barnes@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 5, 21, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Aria"),
+            last_name: String::from("Cooper"),
+            email: String::from("aria.cooper@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 6, 22, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Zachary"),
+            last_name: String::from("Wells"),
+            email: String::from("zachary.wells@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 7, 23, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Eva"),
+            last_name: String::from("Gordon"),
+            email: String::from("eva.gordon@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 8, 0, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Nathan"),
+            last_name: String::from("Fisher"),
+            email: String::from("nathan.fisher@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 9, 1, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Stella"),
+            last_name: String::from("Bishop"),
+            email: String::from("stella.bishop@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 10, 2, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Hazel"),
+            last_name: String::from("Harrison"),
+            email: String::from("hazel.harrison@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 11, 3, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Connor"),
+            last_name: String::from("Murray"),
+            email: String::from("connor.murray@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 12, 4, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Ivy"),
+            last_name: String::from("Wagner"),
+            email: String::from("ivy.wagner@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 13, 5, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Silas"),
+            last_name: String::from("Dixon"),
+            email: String::from("silas.dixon@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 14, 6, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Violet"),
+            last_name: String::from("Ferguson"),
+            email: String::from("violet.ferguson@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 15, 7, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Leo"),
+            last_name: String::from("Hudson"),
+            email: String::from("leo.hudson@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 16, 8, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Eliana"),
+            last_name: String::from("Bishop"),
+            email: String::from("eliana.bishop@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 17, 9, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Xander"),
+            last_name: String::from("Fletcher"),
+            email: String::from("xander.fletcher@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 18, 10, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Adeline"),
+            last_name: String::from("Olson"),
+            email: String::from("adeline.olson@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 19, 11, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Lucy"),
+            last_name: String::from("Graham"),
+            email: String::from("lucy.graham@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 20, 12, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Max"),
+            last_name: String::from("Kennedy"),
+            email: String::from("max.kennedy@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 21, 13, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Avery"),
+            last_name: String::from("Powell"),
+            email: String::from("avery.powell@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 22, 14, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Ezra"),
+            last_name: String::from("Barker"),
+            email: String::from("ezra.barker@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 23, 15, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Nova"),
+            last_name: String::from("Cunningham"),
+            email: String::from("nova.cunningham@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 24, 16, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Milo"),
+            last_name: String::from("Bowman"),
+            email: String::from("milo.bowman@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 25, 17, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Ella"),
+            last_name: String::from("Gibson"),
+            email: String::from("ella.gibson@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 26, 18, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Hannah"),
+            last_name: String::from("Hayes"),
+            email: String::from("hannah.hayes@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 27, 19, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Daniel"),
+            last_name: String::from("Gill"),
+            email: String::from("daniel.gill@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 2, 28, 20, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Luna"),
+            last_name: String::from("Fleming"),
+            email: String::from("luna.fleming@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 1, 21, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Mateo"),
+            last_name: String::from("Holt"),
+            email: String::from("mateo.holt@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 2, 22, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Grace"),
+            last_name: String::from("Huffman"),
+            email: String::from("grace.huffman@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 3, 23, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Oscar"),
+            last_name: String::from("Ibarra"),
+            email: String::from("oscar.ibarra@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 4, 0, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Madeline"),
+            last_name: String::from("Ingram"),
+            email: String::from("madeline.ingram@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 5, 1, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Eleanor"),
+            last_name: String::from("Johnston"),
+            email: String::from("eleanor.johnston@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 6, 2, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Sawyer"),
+            last_name: String::from("Kane"),
+            email: String::from("sawyer.kane@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 7, 3, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Gabriel"),
+            last_name: String::from("Larson"),
+            email: String::from("gabriel.larson@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 8, 4, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Levi"),
+            last_name: String::from("Lawrence"),
+            email: String::from("levi.lawrence@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 9, 5, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Paisley"),
+            last_name: String::from("Lloyd"),
+            email: String::from("paisley.lloyd@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 10, 6, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Lincoln"),
+            last_name: String::from("Logan"),
+            email: String::from("lincoln.logan@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 11, 7, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Zion"),
+            last_name: String::from("Lyons"),
+            email: String::from("zion.lyons@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 12, 8, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Maya"),
+            last_name: String::from("MacDonald"),
+            email: String::from("maya.macdonald@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 13, 9, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Aria"),
+            last_name: String::from("Madden"),
+            email: String::from("aria.madden@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 14, 10, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Hunter"),
+            last_name: String::from("Mahoney"),
+            email: String::from("hunter.mahoney@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 15, 11, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Sawyer"),
+            last_name: String::from("Marsh"),
+            email: String::from("sawyer.marsh@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 16, 12, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Adeline"),
+            last_name: String::from("Mclean"),
+            email: String::from("adeline.mclean@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 17, 13, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Alice"),
+            last_name: String::from("Mendez"),
+            email: String::from("alice.mendez@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 18, 14, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Grayson"),
+            last_name: String::from("Merritt"),
+            email: String::from("grayson.merritt@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 19, 15, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Ryker"),
+            last_name: String::from("Middleton"),
+            email: String::from("ryker.middleton@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 20, 16, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Harper"),
+            last_name: String::from("Morton"),
+            email: String::from("harper.morton@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 21, 17, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Nash"),
+            last_name: String::from("Nicholson"),
+            email: String::from("nash.nicholson@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 22, 18, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Penelope"),
+            last_name: String::from("Nixon"),
+            email: String::from("penelope.nixon@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 23, 19, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Ezekiel"),
+            last_name: String::from("Noble"),
+            email: String::from("ezekiel.noble@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 24, 20, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Lila"),
+            last_name: String::from("Norman"),
+            email: String::from("lila.norman@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 25, 21, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Emery"),
+            last_name: String::from("Odom"),
+            email: String::from("emery.odom@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 26, 22, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Mabel"),
+            last_name: String::from("Orr"),
+            email: String::from("mabel.orr@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 27, 23, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Quincy"),
+            last_name: String::from("Osborn"),
+            email: String::from("quincy.osborn@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 28, 0, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Odin"),
+            last_name: String::from("Owens"),
+            email: String::from("odin.owens@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 29, 1, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Piper"),
+            last_name: String::from("Page"),
+            email: String::from("piper.page@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 30, 2, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Quinn"),
+            last_name: String::from("Parks"),
+            email: String::from("quinn.parks@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 3, 31, 3, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Rory"),
+            last_name: String::from("Patel"),
+            email: String::from("rory.patel@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 4, 1, 4, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Rowan"),
+            last_name: String::from("Patton"),
+            email: String::from("rowan.patton@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 4, 2, 5, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Sage"),
+            last_name: String::from("Paul"),
+            email: String::from("sage.paul@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 4, 3, 6, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Skyler"),
+            last_name: String::from("Perry"),
+            email: String::from("skyler.perry@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 4, 4, 7, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            first_name: String::from("Tate"),
+            last_name: String::from("Peters"),
+            email: String::from("tate.peters@example.com"),
+            mobile: String::from("+1122334455"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 4, 5, 8, 0, 0).unwrap(),
+            updated_at: None,
+        },
+        Contact {
+            id: Uuid::parse_str("123e4567-e89b-12d3-a456-426655440000").unwrap(),
+            first_name: String::from("Zara"),
+            last_name: String::from("Phillips"),
+            email: String::from("zara.phillips@example.com"),
+            mobile: String::from("+9988776655"),
+            active: true,
+            organisation: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2022, 4, 6, 9, 0, 0).unwrap(),
+            updated_at: None,
+        },
+    ]
 }

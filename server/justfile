@@ -1,0 +1,8 @@
+dev:
+    cargo watch -c -x c
+
+dev-r:
+    cargo watch -c -x r
+
+lint:
+    cargo clippy -- -W clippy::pedantic
